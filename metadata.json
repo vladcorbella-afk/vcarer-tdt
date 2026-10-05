@@ -1,0 +1,6 @@
+{
+  "name": "VoxBridge PT-EN — Intérprete Simultâneo",
+  "description": "Intérprete simultâneo de voz em tempo real entre Português do Brasil (PT-BR) e Inglês (EN) com concordância rigorosa de gênero vocal e modos Alternado e Fixo.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
