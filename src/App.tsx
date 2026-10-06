@@ -882,50 +882,50 @@ export default function App() {
 
         {/* TAB 1: INTÉRPRETE (Main Single-Screen Mobile/Tablet/Desktop View) */}
         {activeTab === 'interprete' && (
-          <div className="space-y-4">
-            {/* Compact 2-Card Mode & Gender Selector Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-3.5">
+            {/* Unified Compact Mode & Gender Selector Card */}
+            <div className="bg-[#111827] border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Operation Mode */}
-              <div className="bg-[#111827] border border-slate-800 rounded-xl p-2.5">
-                <div className="text-[11px] text-slate-400 font-medium px-1 mb-1.5">
+              <div>
+                <div className="text-[11px] text-slate-400 font-medium px-1 mb-1">
                   1. Modo de Operação
                 </div>
-                <div className="grid grid-cols-2 gap-1.5 bg-[#0B0F17] p-1 rounded-lg border border-slate-800/80">
+                <div className="grid grid-cols-2 gap-1 bg-[#0B0F17] p-1 rounded-lg border border-slate-800/80">
                   <button
                     type="button"
                     onClick={() => setOperationMode('ALTERNADO')}
-                    className={`min-h-[42px] px-2 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer text-center leading-tight ${
+                    className={`min-h-[38px] px-2 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer text-center whitespace-nowrap truncate ${
                       operationMode === 'ALTERNADO'
                         ? 'bg-emerald-500 text-slate-950'
                         : 'text-slate-300 hover:text-white'
                     }`}
                   >
-                    Alternado (PT ↔ EN)
+                    Alternado (PT↔EN)
                   </button>
                   <button
                     type="button"
                     onClick={() => setOperationMode('FIXO_PT_BR')}
-                    className={`min-h-[42px] px-2 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer text-center leading-tight ${
+                    className={`min-h-[38px] px-2 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer text-center whitespace-nowrap truncate ${
                       operationMode === 'FIXO_PT_BR'
                         ? 'bg-emerald-500 text-slate-950'
                         : 'text-slate-300 hover:text-white'
                     }`}
                   >
-                    Fixo Pessoa 2 (Só PT-BR)
+                    Fixo (Só PT-BR)
                   </button>
                 </div>
               </div>
 
               {/* Speaker Gender Agreement */}
-              <div className="bg-[#111827] border border-slate-800 rounded-xl p-2.5">
-                <div className="text-[11px] text-slate-400 font-medium px-1 mb-1.5">
-                  2. Concordância de Gênero (Emissor)
+              <div>
+                <div className="text-[11px] text-slate-400 font-medium px-1 mb-1">
+                  2. Gênero do Emissor
                 </div>
-                <div className="grid grid-cols-3 gap-1.5 bg-[#0B0F17] p-1 rounded-lg border border-slate-800/80">
+                <div className="grid grid-cols-3 gap-1 bg-[#0B0F17] p-1 rounded-lg border border-slate-800/80">
                   <button
                     type="button"
                     onClick={() => setGenderMode('AUTO')}
-                    className={`min-h-[42px] px-2 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer text-center leading-tight ${
+                    className={`min-h-[38px] px-2 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer text-center whitespace-nowrap truncate ${
                       genderMode === 'AUTO'
                         ? 'bg-slate-200 text-slate-950'
                         : 'text-slate-300 hover:text-white'
@@ -936,24 +936,24 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setGenderMode('FEMININO')}
-                    className={`min-h-[42px] px-2 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer text-center leading-tight ${
+                    className={`min-h-[38px] px-2 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer text-center whitespace-nowrap truncate ${
                       genderMode === 'FEMININO'
                         ? 'bg-rose-400 text-slate-950'
                         : 'text-slate-300 hover:text-white'
                     }`}
                   >
-                    Mulher (Fem.)
+                    Mulher
                   </button>
                   <button
                     type="button"
                     onClick={() => setGenderMode('MASCULINO')}
-                    className={`min-h-[42px] px-2 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer text-center leading-tight ${
+                    className={`min-h-[38px] px-2 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer text-center whitespace-nowrap truncate ${
                       genderMode === 'MASCULINO'
                         ? 'bg-sky-400 text-slate-950'
                         : 'text-slate-300 hover:text-white'
                     }`}
                   >
-                    Homem (Masc.)
+                    Homem
                   </button>
                 </div>
               </div>

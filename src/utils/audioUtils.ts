@@ -275,14 +275,47 @@ export async function playWavBase64(
 }
 
 export function cleanClientErrorMessage(rawError: unknown): string {
-  const str = rawError instanceof Error ? rawError.message : String(rawError);
+  if (!rawError) return 'Erro desconhecido na tradução.';
+
+  let str = '';
+  if (rawError instanceof Error) {
+    str = rawError.message;
+  } else if (typeof rawError === 'string') {
+    str = rawError;
+  } else if (typeof rawError === 'object') {
+    const obj = rawError as Record<string, any>;
+    if (typeof obj.message === 'string') {
+      str = obj.message;
+    } else if (obj.error && typeof obj.error.message === 'string') {
+      str = obj.error.message;
+    } else if (typeof obj.error === 'string') {
+      str = obj.error;
+    } else if (typeof obj.code === 'string') {
+      str = obj.code;
+    } else {
+      try {
+        str = JSON.stringify(rawError);
+      } catch {
+        str = 'Erro de comunicação com o servidor.';
+      }
+    }
+  } else {
+    str = String(rawError);
+  }
+
   if (
-    str.includes('Unexpected token') ||
-    str.includes('is not valid JSON') ||
+    str.includes('[object Object]') ||
+    str.includes('NOT_FOUND') ||
+    str.includes('The page could not be found') ||
     str.includes('The page c')
   ) {
+    return 'Rota /api não encontrada no deploy atual da Vercel. Faça o commit/deploy das novas funções /api e verifique a variável GEMINI_API_KEY na Vercel.';
+  }
+
+  if (str.includes('Unexpected token') || str.includes('is not valid JSON')) {
     return 'O servidor está reiniciando ou reconectando. Aguarde 2 segundos e tente novamente.';
   }
+
   try {
     const match = str.match(/\{[\s\S]*\}/);
     if (match) {
@@ -290,8 +323,14 @@ export function cleanClientErrorMessage(rawError: unknown): string {
       if (parsed?.error?.code === 503 || parsed?.error?.status === 'UNAVAILABLE') {
         return 'Alta demanda momentânea no modelo de voz. Tentando reconexão automática — tente novamente em alguns segundos.';
       }
-      if (parsed?.error?.message) {
-        return String(parsed.error.message);
+      if (parsed?.error?.code === 'NOT_FOUND' || parsed?.code === 'NOT_FOUND') {
+        return 'Rota /api não encontrada no deploy da Vercel. Atualize o deploy com a pasta /api e configure GEMINI_API_KEY na Vercel.';
+      }
+      if (typeof parsed?.error?.message === 'string') {
+        return parsed.error.message;
+      }
+      if (typeof parsed?.message === 'string') {
+        return parsed.message;
       }
     }
   } catch {
@@ -324,20 +363,17 @@ export async function postJsonWithRetry<T>(
       try {
         data = rawText ? JSON.parse(rawText) : {};
       } catch {
-        // Server or proxy returned plain text / HTML (e.g., "The page could not be found" during cold start)
         if (attempt < maxAttempts) {
           await new Promise((r) => setTimeout(r, 700 * attempt));
           continue;
         }
-        throw new Error(
-          'Serviço de tradução reconectando. Tente novamente em alguns instantes.'
-        );
+        throw new Error(cleanClientErrorMessage(rawText));
       }
 
       if (!response.ok) {
-        const msg = cleanClientErrorMessage(
-          data?.error || `Erro HTTP ${response.status}`
-        );
+        const extractedError =
+          data?.error ?? data?.message ?? `Erro HTTP ${response.status}`;
+        const msg = cleanClientErrorMessage(extractedError);
         if (
           (response.status === 503 ||
             response.status === 429 ||
@@ -353,7 +389,9 @@ export async function postJsonWithRetry<T>(
       return data as T;
     } catch (err: unknown) {
       lastError =
-        err instanceof Error ? err : new Error(cleanClientErrorMessage(err));
+        err instanceof Error
+          ? new Error(cleanClientErrorMessage(err.message))
+          : new Error(cleanClientErrorMessage(err));
       if (attempt < maxAttempts) {
         await new Promise((r) => setTimeout(r, 600 * attempt));
       }
