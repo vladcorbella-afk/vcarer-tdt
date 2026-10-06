@@ -6,9 +6,6 @@ import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
 import {
   GoogleGenAI,
-  GenerateContentParameters,
-  GenerateContentResponse,
-  LiveServerMessage,
   Modality,
   ThinkingLevel,
   Type,
@@ -19,11 +16,11 @@ const __dirname = path.dirname(__filename);
 
 const PORT = 3000;
 
-// Ordered fallback chains using strictly approved models
+// Ordered fallback chains: gemini-3.1-flash-lite first for lowest latency & highest availability
 const INTERPRET_MODEL_CHAIN = [
+  'gemini-3.1-flash-lite',
   'gemini-3.8-flash',
   'gemini-flash-latest',
-  'gemini-3.1-flash-lite',
 ] as const;
 
 const TTS_MODEL_CHAIN = [
@@ -103,13 +100,16 @@ function formatFriendlyError(err: unknown): string {
 
 async function generateContentWithFallback(
   ai: GoogleGenAI,
-  buildParams: (modelName: string) => GenerateContentParameters
-): Promise<{ response: GenerateContentResponse; modelUsed: string }> {
+  buildParams: (modelName: string) => Parameters<GoogleGenAI['models']['generateContent']>[0]
+): Promise<{
+  response: Awaited<ReturnType<GoogleGenAI['models']['generateContent']>>;
+  modelUsed: string;
+}> {
   let lastError: unknown = null;
 
   for (let mIdx = 0; mIdx < INTERPRET_MODEL_CHAIN.length; mIdx++) {
     const modelName = INTERPRET_MODEL_CHAIN[mIdx];
-    const maxAttempts = mIdx === 0 ? 2 : 2;
+    const maxAttempts = 2;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -119,18 +119,21 @@ async function generateContentWithFallback(
       } catch (err: unknown) {
         lastError = err;
         console.warn(
-          `[VoxBridge] Tentativa ${attempt}/${maxAttempts} falhou no modelo ${modelName}:`,
+          `[VoxVcarer] Tentativa ${attempt}/${maxAttempts} falhou no modelo ${modelName}:`,
           err instanceof Error ? err.message : err
         );
 
+        // Immediately jump to next fallback model on first failure so user never waits long
+        if (mIdx < INTERPRET_MODEL_CHAIN.length - 1 && attempt === 1) {
+          break;
+        }
+
         if (!isTransientDemandError(err)) {
-          // If it's a model-specific 404 or config issue, move to next model immediately
           break;
         }
 
         if (attempt < maxAttempts) {
-          const backoffMs = 350 * attempt + Math.floor(Math.random() * 200);
-          await sleep(backoffMs);
+          await sleep(250);
         }
       }
     }
@@ -258,44 +261,44 @@ async function synthesizeSpeechWav(
   if (!text || !text.trim()) return null;
 
   for (const ttsModel of TTS_MODEL_CHAIN) {
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const ttsResponse = await ai.models.generateContent({
-          model: ttsModel,
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text: text.trim(),
-                  // @ts-ignore - speechMetadata supported on Gemini 3.8 TTS
-                  speechMetadata: {
-                    style: toneStyle || 'Natural, clear simultaneous interpreter delivery',
-                  },
+    try {
+      const ttsResponse = await ai.models.generateContent({
+        model: ttsModel,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: text.trim(),
+                // @ts-ignore - speechMetadata supported on Gemini 3.8 TTS
+                speechMetadata: {
+                  style: toneStyle || 'Natural, clear simultaneous interpreter delivery',
                 },
-              ],
-            },
-          ],
-          config: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName },
               },
+            ],
+          },
+        ],
+        config: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName },
             },
           },
-        });
+        },
+      });
 
-        const base64Audio =
-          ttsResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (base64Audio) {
-          return base64Audio;
-        }
-      } catch (err) {
-        console.warn(`[VoxBridge TTS] Tentativa ${attempt} no modelo ${ttsModel} falhou:`, err instanceof Error ? err.message : err);
-        if (!isTransientDemandError(err)) break;
-        if (attempt === 1) await sleep(300);
+      const base64Audio =
+        ttsResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        return base64Audio;
       }
+    } catch (err) {
+      console.warn(
+        `[VoxVcarer TTS] Falha no modelo ${ttsModel}:`,
+        err instanceof Error ? err.message : err
+      );
+      if (!isTransientDemandError(err)) break;
     }
   }
   return null;
@@ -311,7 +314,7 @@ async function startServer() {
     res.json({ status: 'ok' });
   });
 
-  // 1. Audio Interpretation Endpoint with Multi-Model Retry & Fallback
+  // 1. Audio Interpretation Endpoint
   app.post('/api/interpret-audio', async (req, res) => {
     try {
       const {
@@ -443,7 +446,7 @@ async function startServer() {
     }
   });
 
-  // 2. Text / Scenario Interpretation Endpoint with Multi-Model Retry & Fallback
+  // 2. Text / Scenario Interpretation Endpoint
   app.post('/api/interpret-text', async (req, res) => {
     try {
       const {
@@ -550,7 +553,7 @@ async function startServer() {
     }
   });
 
-  // 3. Dedicated TTS Replay Endpoint with Fallback
+  // 3. Dedicated TTS Replay Endpoint
   app.post('/api/tts', async (req, res) => {
     try {
       const {
@@ -574,7 +577,12 @@ async function startServer() {
     }
   });
 
-  // 4. WebSocket Server for Real-Time Gemini Live API (/ws/live) with Model Fallback
+  // Ensure any unknown /api/* route always returns JSON, never HTML/text
+  app.all('/api/*', (_req, res) => {
+    res.status(404).json({ error: 'Endpoint de API não encontrado.' });
+  });
+
+  // 4. WebSocket Server for Real-Time Gemini Live API (/ws/live)
   const wss = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', (request, socket, head) => {
@@ -638,7 +646,7 @@ async function startServer() {
                   );
                 }
               },
-              onmessage: (message: LiveServerMessage) => {
+              onmessage: (message) => {
                 if (clientWs.readyState !== WebSocket.OPEN) return;
 
                 const parts = message.serverContent?.modelTurn?.parts || [];
@@ -776,7 +784,7 @@ async function startServer() {
   }
 
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`VoxBridge Interpreter Server listening on http://0.0.0.0:${PORT}`);
+    console.log(`VoxVcarer Server listening on http://0.0.0.0:${PORT}`);
   });
 }
 

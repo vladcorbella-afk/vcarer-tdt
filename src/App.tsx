@@ -677,14 +677,23 @@ export default function App() {
       setIsPlayingOutput(true);
       const res = await fetch('/api/tts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
         body: JSON.stringify({
           text: turn.translation,
           gender: turn.detectedGender,
           tone: turn.detectedTone,
         }),
       });
-      const data = await res.json();
+      const rawText = await res.text();
+      let data: Record<string, any> = {};
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        data = {};
+      }
       if (res.ok && data.audioWavBase64) {
         setHistory((prev) =>
           prev.map((item) =>

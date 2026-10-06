@@ -276,6 +276,13 @@ export async function playWavBase64(
 
 export function cleanClientErrorMessage(rawError: unknown): string {
   const str = rawError instanceof Error ? rawError.message : String(rawError);
+  if (
+    str.includes('Unexpected token') ||
+    str.includes('is not valid JSON') ||
+    str.includes('The page c')
+  ) {
+    return 'O servidor está reiniciando ou reconectando. Aguarde 2 segundos e tente novamente.';
+  }
   try {
     const match = str.match(/\{[\s\S]*\}/);
     if (match) {
@@ -304,14 +311,40 @@ export async function postJsonWithRetry<T>(
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      const rawText = await response.text();
+      let data: Record<string, any> | null = null;
+
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        // Server or proxy returned plain text / HTML (e.g., "The page could not be found" during cold start)
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 700 * attempt));
+          continue;
+        }
+        throw new Error(
+          'Serviço de tradução reconectando. Tente novamente em alguns instantes.'
+        );
+      }
+
       if (!response.ok) {
-        const msg = cleanClientErrorMessage(data.error || `Erro HTTP ${response.status}`);
-        if ((response.status === 503 || response.status === 429) && attempt < maxAttempts) {
+        const msg = cleanClientErrorMessage(
+          data?.error || `Erro HTTP ${response.status}`
+        );
+        if (
+          (response.status === 503 ||
+            response.status === 429 ||
+            response.status === 502 ||
+            response.status === 504) &&
+          attempt < maxAttempts
+        ) {
           await new Promise((r) => setTimeout(r, 600 * attempt));
           continue;
         }
@@ -319,9 +352,10 @@ export async function postJsonWithRetry<T>(
       }
       return data as T;
     } catch (err: unknown) {
-      lastError = err instanceof Error ? err : new Error(cleanClientErrorMessage(err));
+      lastError =
+        err instanceof Error ? err : new Error(cleanClientErrorMessage(err));
       if (attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 500 * attempt));
+        await new Promise((r) => setTimeout(r, 600 * attempt));
       }
     }
   }
